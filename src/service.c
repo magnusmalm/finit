@@ -474,6 +474,23 @@ static int service_start(svc_t *svc)
 	return result;
 }
 
+static void service_on_term_script(svc_t *svc)
+{
+	char on_term_cmd[256];
+
+	if (svc->on_term) {
+		_d("Running on_term script %s", svc->on_term);
+		if (!fexist(svc->on_term))
+			_d("on_term script %s does not exist.",
+			   svc->on_term);
+		else {
+			snprintf(on_term_cmd, sizeof(on_term_cmd),
+				 "%s %d &", svc->on_term, svc->state);
+			system(on_term_cmd);
+		}
+	}
+}
+
 /**
  * service_kill - Forcefully terminate a service
  * @param svc  Service to kill
@@ -497,6 +514,8 @@ static void service_kill(svc_t *svc)
 		print_desc("Killing ", svc->desc);
 
 	kill(-svc->pid, SIGKILL);
+
+	service_on_term_script(svc);
 
 	/* Let SIGKILLs stand out, show result as [WARN] */
 	if (runlevel != 1)
@@ -595,6 +614,8 @@ static int service_stop(svc_t *svc)
 			break;
 		}
 	}
+
+	service_on_term_script(svc);
 
 	if (runlevel != 1)
 		print_result(res);
@@ -856,6 +877,7 @@ int service_register(int type, char *cfg, struct rlimit rlimit[], char *file)
 	char *service = NULL, *proto = NULL, *ifaces = NULL;
 	char *cmd, *desc, *runlevels = NULL, *cond = NULL;
 	char *name = NULL, *halt = NULL, *delay = NULL;
+	char *on_term = NULL;
 	svc_t *svc;
 	plugin_t *plugin = NULL;
 
@@ -921,6 +943,8 @@ int service_register(int type, char *cfg, struct rlimit rlimit[], char *file)
 			halt = &cmd[5];
 		else if (!strncasecmp(cmd, "kill:", 5))
 			delay = &cmd[5];
+		else if (!strncasecmp(cmd, "on_term:", 8))
+			on_term = &cmd[8];
 		else if (cmd[0] != '/' && strchr(cmd, '/'))
 			service = cmd;   /* inetd service/proto */
 		else
@@ -1053,6 +1077,8 @@ recreate:
 		parse_log(svc, log);
 	if (desc)
 		strlcpy(svc->desc, desc, sizeof(svc->desc));
+	if (on_term)
+		strlcpy(svc->on_term, on_term, sizeof(svc->on_term));
 
 #ifdef INETD_ENABLED
 	if (svc_is_inetd(svc)) {
@@ -1343,6 +1369,8 @@ restart:
 			if (svc_is_daemon(svc)) {
 				svc_restarting(svc);
 				svc_set_state(svc, SVC_HALTED_STATE);
+
+				service_on_term_script(svc);
 
 				/*
 				 * Restart directly after the first crash,
