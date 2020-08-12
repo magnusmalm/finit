@@ -240,6 +240,16 @@ Syntax
   use the option `kill:SEC`, e.g., `kill:10` to wait 10 seconds before
   sending `SIGKILL`.
 
+  If a service does not clean up after itself, or crashes, a script
+  can be configured to be executed by finit when the service is
+  stopped or crashes. This can be done with the optional `on_term`
+  argument:
+
+        on_term:<absolute/path/to/script>
+
+  The script is executed in the background with the service's state as
+  single argument passed along to the script.
+
 * `inetd service/proto[@iflist] <wait|nowait> [LVLS] /path/to/daemon args`  
   Launch a daemon when a client initiates a connection on an Internet
   port.  Available services are listed in the UNIX `/etc/services` file.
